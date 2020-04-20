@@ -1078,6 +1078,7 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   size_t nbytes = data.size();
 
   IOStatus s = WaitQueue(200);
+  fprintf(stderr, "%s\n", "post waitqueue");
   if (!s.ok()) {
     return s;
   }
