@@ -13,7 +13,7 @@
 using namespace rocksdb;
 #define BUF_SIZE 1024 * 512
 char buffer[BUF_SIZE];
-std::string kDBPath = "/home/yifan/Documents/database/rocksdb_simple_example_old";
+std::string kDBPath = "/home/reshma/rocksdb_simple_example_new";
 
 int main() {
   DB* db;
@@ -30,7 +30,7 @@ int main() {
   memset(buffer, '1', sizeof(buffer)/sizeof(char));
 
   // Put key-value
-  long int num_ops = 2000;
+  long int num_ops = 20000;
    for (long int i = 0; i < num_ops; i++) {
     s = db->Put(WriteOptions(), std::__cxx11::to_string(i), buffer);
     assert(s.ok());
