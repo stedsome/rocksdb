@@ -1096,7 +1096,6 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   struct iovec *iov = reinterpret_cast<struct iovec*>(buffer);
   iov->iov_base = data_buf;
   iov->iov_len = data.size();
-  assert(data_buf)
   memcpy(data_buf, data.data(), data.size());
   io_uring_prep_writev(sqe, fd_, iov, 1, filesize_);
   sqe->user_data = reinterpret_cast<uint64_t>(buffer);
