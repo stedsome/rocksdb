@@ -43,6 +43,7 @@
 #define F_SET_RW_HINT (F_LINUX_SPECIFIC_BASE + 12)
 #endif
 
+pthread_mutex_t lock; 
 namespace ROCKSDB_NAMESPACE {
 
 // A wrapper for fadvise, if the platform doesn't support fadvise,
@@ -1078,12 +1079,13 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   size_t nbytes = data.size();
 
   IOStatus s = WaitQueue(200);
-  fprintf(stderr, "%s\n", "post waitqueue");
+
   if (!s.ok()) {
     return s;
   }
 
   struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
+    fprintf(stderr, "%s\n", "post get sqe");
   if (sqe == nullptr) {
     return IOStatus::IOError("async append: get sqe");
   }
