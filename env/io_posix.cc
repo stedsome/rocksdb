@@ -1054,7 +1054,7 @@ IOStatus PosixWritableFile::WaitQueue(const int max_len) {
   */
   while (uring_queue_len_ > max_len) {
     struct io_uring_cqe* cqe;
-    int ret = io_uring_wait_cqe(uring_, &cqe);
+    int ret = io_uring_wait_cqe(&uring_, &cqe);
     if (ret < 0) {
       return IOStatus::IOError("wait queue: wait cqe");
     }
@@ -1065,7 +1065,7 @@ IOStatus PosixWritableFile::WaitQueue(const int max_len) {
       void* buffer = reinterpret_cast<void*>(cqe->user_data);
       free(buffer);
     }
-    io_uring_cqe_seen(uring_, cqe);
+    io_uring_cqe_seen(&uring_, cqe);
     uring_queue_len_.fetch_sub(1);
   }
   return IOStatus::OK();
