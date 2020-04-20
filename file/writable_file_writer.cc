@@ -288,7 +288,10 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size, bool asy
   assert(!use_direct_io());
   const char* src = data;
   size_t left = size;
-  fprintf(stderr, "%s\n", "inside write Buffered");
+  if (async) {
+    fprintf(stderr, "%s\n", "inside write Buffered");
+  }
+
   while (left > 0) {
     size_t allowed;
     if (rate_limiter_ != nullptr) {
@@ -318,6 +321,7 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size, bool asy
           s = writable_file_->Append(Slice(src, allowed), IOOptions(), nullptr);
         } else {
           s = writable_file_->AsyncAppend(Slice(src, allowed), IOOptions(), nullptr);
+          fprintf(stderr, "%s\n", "exiting write Buffered");
         }
         
         SetPerfLevel(prev_perf_level);
