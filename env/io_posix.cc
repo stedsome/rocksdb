@@ -1089,7 +1089,7 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   void* buffer = malloc(sizeof(struct iovec) + data.size());
   if (buffer == NULL) {
     fprintf(stderr, "%s\n", "malloc failed");
-    eturn IOStatus::IOError("no enough space");
+    return IOStatus::IOError("no enough space");
   }
   void* data_buf = reinterpret_cast<void*>(
       reinterpret_cast<char*>(buffer) + sizeof(struct iovec));
