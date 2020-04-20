@@ -171,7 +171,7 @@ class PosixWritableFile : public FSWritableFile {
 #endif  // ROCKSDB_RANGESYNC_PRESENT
   struct io_uring uring_;
   std::atomic<int> uring_queue_len_ = 0;
-  std:mutex io_uring_lock; 
+  std::mutex io_uring_lock; 
 
  public:
   explicit PosixWritableFile(const std::string& fname, int fd,
