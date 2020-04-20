@@ -288,7 +288,9 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size, bool asy
   assert(!use_direct_io());
   const char* src = data;
   size_t left = size;
-
+   ROCKS_LOG_INFO(
+          db_options_.info_log,
+          "[] [JOB] inside writeBuffered" PRIu64 "\n");
   while (left > 0) {
     size_t allowed;
     if (rate_limiter_ != nullptr) {
@@ -321,6 +323,9 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size, bool asy
         }
         
         SetPerfLevel(prev_perf_level);
+        ROCKS_LOG_INFO(
+          db_options_.info_log,
+          "[] [JOB] exiting writeBuffered" PRIu64 "\n");
       }
 #ifndef ROCKSDB_LITE
       if (ShouldNotifyListeners()) {

@@ -1038,7 +1038,7 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
     //  - as long as other threads don't modify it, it's safe to read
     //    from std::deque from multiple threads concurrently.
     for (auto& log : logs_) {
-      status = log.writer->file()->Sync(immutable_db_options_.use_fsync, true);
+      status = log.writer->file()->Sync(immutable_db_options_.use_fsync, false);
       if (!status.ok()) {
         break;
       }
