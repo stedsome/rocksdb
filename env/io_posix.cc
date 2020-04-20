@@ -1007,6 +1007,7 @@ PosixWritableFile::PosixWritableFile(const std::string& fname, int fd,
 #endif  // ROCKSDB_RANGESYNC_PRESENT
   assert(!options.use_mmap_writes);
   io_uring_queue_init(kIoUringDepth, &uring_, 0);
+  uring_queue_len_ = 0;
 }
 
 PosixWritableFile::~PosixWritableFile() {

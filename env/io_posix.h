@@ -170,7 +170,7 @@ class PosixWritableFile : public FSWritableFile {
   bool sync_file_range_supported_;
 #endif  // ROCKSDB_RANGESYNC_PRESENT
   struct io_uring uring_;
-  std::atomic_int uring_queue_len_ = 0;
+  std::atomic_int uring_queue_len_;
   std::mutex io_uring_lock; 
 
  public:
