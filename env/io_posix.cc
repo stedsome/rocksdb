@@ -1087,7 +1087,7 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   io_uring_lock.lock();
   struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
   io_uring_lock.unlock();
-  fprintf(stderr, "%s\n", "post get sqe");
+  //fprintf(stderr, "%s\n", "post get sqe");
   if (sqe == nullptr) {
     return IOStatus::IOError("async append: get sqe");
   }
@@ -1102,7 +1102,7 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   iov->iov_base = data_buf;
   iov->iov_len = data.size();
   memcpy(data_buf, data.data(), data.size());
-  fprintf(stderr, "%s\n", "post memcpy");
+  //fprintf(stderr, "%s\n", "post memcpy");
   io_uring_prep_writev(sqe, fd_, iov, 1, filesize_);
   sqe->user_data = reinterpret_cast<uint64_t>(buffer);
   io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
