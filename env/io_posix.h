@@ -19,7 +19,7 @@
 #include "util/thread_local.h"
 #include "rocksdb/file_system.h"
 #include "rocksdb/io_status.h"
-
+#include <mutex>
 // For non linux platform, the following macros are used only as place
 // holder.
 #if !(defined OS_LINUX) && !(defined CYGWIN) && !(defined OS_AIX)
@@ -170,7 +170,8 @@ class PosixWritableFile : public FSWritableFile {
   bool sync_file_range_supported_;
 #endif  // ROCKSDB_RANGESYNC_PRESENT
   struct io_uring uring_;
-  int uring_queue_len_ = 0;
+  std::atomic<int> uring_queue_len_(0);
+  std:mutex io_uring_lock; 
 
  public:
   explicit PosixWritableFile(const std::string& fname, int fd,
@@ -189,7 +190,7 @@ class PosixWritableFile : public FSWritableFile {
                                     IODebugContext* dbg) override;
   virtual IOStatus Flush(const IOOptions& opts, IODebugContext* dbg) override;
   virtual IOStatus Sync(const IOOptions& opts, IODebugContext* dbg) override;
-  IOStatus WaitQueue(int max_len);
+  IOStatus WaitQueue(const int max_len);
   virtual IOStatus AsyncAppend(const Slice& data, const IOOptions& opts, IODebugContext* dbg) override;
   virtual IOStatus AsyncSync(const IOOptions& opts, IODebugContext* dbg) override;
   IOStatus AsyncRangeSync(uint64_t offset, uint64_t nbytes);

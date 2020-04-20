@@ -43,7 +43,7 @@
 #define F_SET_RW_HINT (F_LINUX_SPECIFIC_BASE + 12)
 #endif
 
-pthread_mutex_t lock; 
+
 namespace ROCKSDB_NAMESPACE {
 
 // A wrapper for fadvise, if the platform doesn't support fadvise,
@@ -1033,7 +1033,7 @@ IOStatus PosixWritableFile::Append(const Slice& data, const IOOptions& /*opts*/,
   return IOStatus::OK();
 }
 
-IOStatus PosixWritableFile::WaitQueue(int max_len) {
+IOStatus PosixWritableFile::WaitQueue(const int max_len) {
   if (uring_queue_len_ <= max_len) {
     return IOStatus::OK();
   }
@@ -1053,7 +1053,7 @@ IOStatus PosixWritableFile::WaitQueue(int max_len) {
   */
   while (uring_queue_len_ > max_len) {
     struct io_uring_cqe* cqe;
-    int ret = io_uring_wait_cqe(&uring_, &cqe);
+    int ret = io_uring_wait_cqe(uring_, &cqe);
     if (ret < 0) {
       return IOStatus::IOError("wait queue: wait cqe");
     }
@@ -1064,8 +1064,8 @@ IOStatus PosixWritableFile::WaitQueue(int max_len) {
       void* buffer = reinterpret_cast<void*>(cqe->user_data);
       free(buffer);
     }
-    io_uring_cqe_seen(&uring_, cqe);
-    uring_queue_len_--;
+    io_uring_cqe_seen(uring_, cqe);
+    uring_queue_len_.fetch_sub(1);
   }
   return IOStatus::OK();
 }
@@ -1083,9 +1083,10 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   if (!s.ok()) {
     return s;
   }
-
+  io_uring_lock.lock();
   struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
-    fprintf(stderr, "%s\n", "post get sqe");
+  io_uring_lock.unlock();
+  fprintf(stderr, "%s\n", "post get sqe");
   if (sqe == nullptr) {
     return IOStatus::IOError("async append: get sqe");
   }
@@ -1108,8 +1109,7 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   if (ret <= 0) {
     return IOStatus::IOError("async append: submit");
   }
-  uring_queue_len_++;
-
+  uring_queue_len_.fetch_add(1);
   filesize_ += nbytes;
   return IOStatus::OK();
 }
@@ -1221,7 +1221,9 @@ IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
   if (!s.ok()) {
     return s;
   }
+  io_uring_lock.lock();
   struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
+  io_uring_lock.unlock();
   if (sqe == nullptr) {
     return IOStatus::IOError("sync: get sqe");
   }
@@ -1232,7 +1234,7 @@ IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
   if (ret <= 0) {
     return IOStatus::IOError("sync: submit");
   }
-  uring_queue_len_++;
+  uring_queue_len_.fetch_add(1);
   return IOStatus::OK();
 }
 
@@ -1241,7 +1243,9 @@ IOStatus PosixWritableFile::AsyncRangeSync(uint64_t offset, uint64_t nbytes) {
   if (!s.ok()) {
     return s;
   }
+  io_uring_lock.lock();
   struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
+  io_uring_lock.unlock();
   if (sqe == nullptr) {
     return IOStatus::IOError("sync: get sqe");
   }
@@ -1253,7 +1257,7 @@ IOStatus PosixWritableFile::AsyncRangeSync(uint64_t offset, uint64_t nbytes) {
   if (ret <= 0) {
     return IOStatus::IOError("sync: submit");
   }
-  uring_queue_len_++;
+  uring_queue_len_.fetch_add(1);
   return IOStatus::OK();
 }
 
