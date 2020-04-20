@@ -724,7 +724,7 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
   handle->set_offset(r->offset);
   handle->set_size(block_contents.size());
   assert(r->status.ok());
-  r->status = r->file->Append(block_contents);
+  r->status = r->file->Append(block_contents, true);
   if (r->status.ok()) {
     char trailer[kBlockTrailerSize];
     trailer[0] = type;
@@ -768,7 +768,7 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
     TEST_SYNC_POINT_CALLBACK(
         "BlockBasedTableBuilder::WriteRawBlock:TamperWithChecksum",
         static_cast<char*>(trailer));
-    r->status = r->file->Append(Slice(trailer, kBlockTrailerSize));
+    r->status = r->file->Append(Slice(trailer, kBlockTrailerSize), true);
     if (r->status.ok()) {
       r->status = InsertBlockInCache(block_contents, type, handle);
     }
@@ -779,7 +779,7 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
             (r->alignment - ((block_contents.size() + kBlockTrailerSize) &
                              (r->alignment - 1))) &
             (r->alignment - 1);
-        r->status = r->file->Pad(pad_bytes);
+        r->status = r->file->Pad(pad_bytes, true);
         if (r->status.ok()) {
           r->offset += pad_bytes;
         }
@@ -1054,7 +1054,7 @@ void BlockBasedTableBuilder::WriteFooter(BlockHandle& metaindex_block_handle,
   std::string footer_encoding;
   footer.EncodeTo(&footer_encoding);
   assert(r->status.ok());
-  r->status = r->file->Append(footer_encoding);
+  r->status = r->file->Append(footer_encoding, true);
   if (r->status.ok()) {
     r->offset += footer_encoding.size();
   }
@@ -1163,6 +1163,12 @@ Status BlockBasedTableBuilder::Finish() {
   }
   if (ok()) {
     WriteFooter(metaindex_block_handle, index_block_handle);
+  }
+  if (ok()) {
+    r->status = r->file->Sync(false/*fsync*/, true/*async*/);
+  }
+  if (ok()) {
+    r->status = r->file->WaitAsync();
   }
   if (r->file != nullptr) {
     file_checksum_ = r->file->GetFileChecksum();

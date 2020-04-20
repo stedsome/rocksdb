@@ -108,6 +108,7 @@ class Writer {
   // If true, it does not flush after each write. Instead it relies on the upper
   // layer to manually does the flush by calling ::WriteBuffer()
   bool manual_flush_;
+  bool is_manifest_;
 };
 
 }  // namespace log

@@ -176,7 +176,7 @@ function run_bulkload {
   # This runs with a vector memtable and the WAL disabled to load faster. It is still crash safe and the
   # client can discover where to restart a load after a crash. I think this is a good way to load.
   echo "Bulk loading $num_keys random keys"
-  cmd="./db_bench --benchmarks=fillrandom \
+  cmd="db_bench --benchmarks=fillrandom \
        --use_existing_db=0 \
        --disable_auto_compactions=1 \
        --sync=0 \
@@ -366,7 +366,7 @@ function run_filluniquerandom {
 function run_readrandom {
   echo "Reading $num_keys random keys"
   out_name="benchmark_readrandom.t${num_threads}.log"
-  cmd="./db_bench --benchmarks=readrandom \
+  cmd="db_bench --benchmarks=readrandom \
        --use_existing_db=1 \
        $params_w \
        --threads=$num_threads \

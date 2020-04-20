@@ -480,8 +480,10 @@ IOStatus PosixRandomAccessFile::Read(uint64_t offset, size_t n,
 IOStatus PosixRandomAccessFile::MultiRead(FSReadRequest* reqs,
                                           size_t num_reqs,
                                           const IOOptions& options,
-                                          IODebugContext* dbg) {
+					  IODebugContext* dbg) {
+fprintf(stderr, "inside the multiget function\n");
 #if defined(ROCKSDB_IOURING_PRESENT)
+  fprintf(stderr, "printing our output\n");
   struct io_uring* iu = nullptr;
   if (thread_local_io_urings_) {
     iu = static_cast<struct io_uring*>(thread_local_io_urings_->Get());
@@ -1003,12 +1005,14 @@ PosixWritableFile::PosixWritableFile(const std::string& fname, int fd,
   sync_file_range_supported_ = IsSyncFileRangeSupported(fd_);
 #endif  // ROCKSDB_RANGESYNC_PRESENT
   assert(!options.use_mmap_writes);
+  io_uring_queue_init(kIoUringDepth, &uring_, 0);
 }
 
 PosixWritableFile::~PosixWritableFile() {
   if (fd_ >= 0) {
     PosixWritableFile::Close(IOOptions(), nullptr);
   }
+  io_uring_queue_exit(&uring_);
 }
 
 IOStatus PosixWritableFile::Append(const Slice& data, const IOOptions& /*opts*/,
@@ -1023,6 +1027,80 @@ IOStatus PosixWritableFile::Append(const Slice& data, const IOOptions& /*opts*/,
   if (!PosixWrite(fd_, src, nbytes)) {
     return IOError("While appending to file", filename_, errno);
   }
+
+  filesize_ += nbytes;
+  return IOStatus::OK();
+}
+
+IOStatus PosixWritableFile::WaitQueue(int max_len) {
+  if (uring_queue_len_ <= max_len) {
+    return IOStatus::OK();
+  }
+  /*
+  struct io_uring_cqe* cqes[100];
+  unsigned got = io_uring_peek_batch_cqe(&uring_, cqes, 100);
+  if (got > 0) {
+    for (unsigned i = 0; i < got; i++) {
+      if (cqes[i]->user_data != 0) {
+        void* buf = reinterpret_cast<void*>(cqes[i]->user_data);
+        free(buf);
+      }
+      io_uring_cqe_seen(&uring_, cqes[i]);
+    }
+    uring_queue_len_ -= static_cast<int>(got);
+  }
+  */
+  while (uring_queue_len_ > max_len) {
+    struct io_uring_cqe* cqe;
+    int ret = io_uring_wait_cqe(&uring_, &cqe);
+    if (ret < 0) {
+      return IOStatus::IOError("wait queue: wait cqe");
+    }
+    if (cqe->res < 0) {
+      return IOStatus::IOError("wait queue: res = " + ToString(cqe->res));
+    }
+    if (cqe->user_data != 0) {
+      void* buffer = reinterpret_cast<void*>(cqe->user_data);
+      free(buffer);
+    }
+    io_uring_cqe_seen(&uring_, cqe);
+    uring_queue_len_--;
+  }
+  return IOStatus::OK();
+}
+
+IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*opts*/, IODebugContext* /*dbg*/) {
+  if (use_direct_io()) {
+    assert(IsSectorAligned(data.size(), GetRequiredBufferAlignment()));
+    assert(IsSectorAligned(data.data(), GetRequiredBufferAlignment()));
+  }
+  // const char* src = data.data();
+  size_t nbytes = data.size();
+
+  IOStatus s = WaitQueue(200);
+  if (!s.ok()) {
+    return s;
+  }
+
+  struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
+  if (sqe == nullptr) {
+    return IOStatus::IOError("async append: get sqe");
+  }
+  void* buffer = malloc(sizeof(struct iovec) + data.size());
+  void* data_buf = reinterpret_cast<void*>(
+      reinterpret_cast<char*>(buffer) + sizeof(struct iovec));
+  struct iovec *iov = reinterpret_cast<struct iovec*>(buffer);
+  iov->iov_base = data_buf;
+  iov->iov_len = data.size();
+  memcpy(data_buf, data.data(), data.size());
+  io_uring_prep_writev(sqe, fd_, iov, 1, filesize_);
+  sqe->user_data = reinterpret_cast<uint64_t>(buffer);
+  io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
+  int ret = io_uring_submit(&uring_);
+  if (ret <= 0) {
+    return IOStatus::IOError("async append: submit");
+  }
+  uring_queue_len_++;
 
   filesize_ += nbytes;
   return IOStatus::OK();
@@ -1129,6 +1207,52 @@ IOStatus PosixWritableFile::Sync(const IOOptions& /*opts*/,
   return IOStatus::OK();
 }
 
+IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
+                                 IODebugContext* /*dbg*/) {
+  IOStatus s = WaitQueue(200);
+  if (!s.ok()) {
+    return s;
+  }
+  struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
+  if (sqe == nullptr) {
+    return IOStatus::IOError("sync: get sqe");
+  }
+  io_uring_prep_fsync(sqe, fd_, IORING_FSYNC_DATASYNC);
+  sqe->user_data = 0;
+  io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
+  int ret = io_uring_submit(&uring_);
+  if (ret <= 0) {
+    return IOStatus::IOError("sync: submit");
+  }
+  uring_queue_len_++;
+  return IOStatus::OK();
+}
+
+IOStatus PosixWritableFile::AsyncRangeSync(uint64_t offset, uint64_t nbytes) {
+  IOStatus s = WaitQueue(200);
+  if (!s.ok()) {
+    return s;
+  }
+  struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
+  if (sqe == nullptr) {
+    return IOStatus::IOError("sync: get sqe");
+  }
+  io_uring_prep_rw(IORING_OP_SYNC_FILE_RANGE, sqe, fd_, NULL, offset, nbytes);
+  sqe->sync_range_flags = SYNC_FILE_RANGE_WRITE;
+  sqe->user_data = 0;
+  io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
+  int ret = io_uring_submit(&uring_);
+  if (ret <= 0) {
+    return IOStatus::IOError("sync: submit");
+  }
+  uring_queue_len_++;
+  return IOStatus::OK();
+}
+
+IOStatus PosixWritableFile::WaitAsync() {
+  return WaitQueue(0);
+}
+
 IOStatus PosixWritableFile::Fsync(const IOOptions& /*opts*/,
                                   IODebugContext* /*dbg*/) {
   if (fsync(fd_) < 0) {
@@ -1205,8 +1329,11 @@ IOStatus PosixWritableFile::Allocate(uint64_t offset, uint64_t len,
 #endif
 
 IOStatus PosixWritableFile::RangeSync(uint64_t offset, uint64_t nbytes,
-                                      const IOOptions& opts,
-                                      IODebugContext* dbg) {
+                                      const IOOptions& /*opts*/,
+                                      IODebugContext* /*dbg*/) {
+   return AsyncRangeSync(offset, nbytes);
+
+  /*
 #ifdef ROCKSDB_RANGESYNC_PRESENT
   assert(offset <= static_cast<uint64_t>(std::numeric_limits<off_t>::max()));
   assert(nbytes <= static_cast<uint64_t>(std::numeric_limits<off_t>::max()));
@@ -1230,7 +1357,7 @@ IOStatus PosixWritableFile::RangeSync(uint64_t offset, uint64_t nbytes,
     return IOStatus::OK();
   }
 #endif  // ROCKSDB_RANGESYNC_PRESENT
-  return FSWritableFile::RangeSync(offset, nbytes, opts, dbg);
+  return FSWritableFile::RangeSync(offset, nbytes, opts, dbg); */
 }
 
 #ifdef OS_LINUX

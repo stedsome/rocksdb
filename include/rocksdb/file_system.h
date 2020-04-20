@@ -722,7 +722,9 @@ class FSWritableFile {
   virtual IOStatus Flush(const IOOptions& options, IODebugContext* dbg) = 0;
   virtual IOStatus Sync(const IOOptions& options,
                         IODebugContext* dbg) = 0;  // sync data
-
+  virtual IOStatus AsyncAppend(const Slice& /*data*/, const IOOptions& /*opts*/, IODebugContext* /*dbg*/) { return IOStatus::NotSupported(); }
+  virtual IOStatus AsyncSync(const IOOptions& /*opts*/, IODebugContext* /*dbg*/) { return IOStatus::NotSupported(); }
+  virtual IOStatus WaitAsync() { return IOStatus::NotSupported(); }
   /*
    * Sync data and/or metadata as well.
    * By default, sync only data.

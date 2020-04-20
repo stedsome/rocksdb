@@ -144,6 +144,8 @@ case "$TARGET_OS" in
     Linux)
         PLATFORM=OS_LINUX
         COMMON_FLAGS="$COMMON_FLAGS -DOS_LINUX"
+	PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -luring"
+        COMMON_FLAGS="$COMMON_FLAGS -DROCKSDB_IOURING_PRESENT"
         if [ -z "$USE_CLANG" ]; then
             COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp"
         else

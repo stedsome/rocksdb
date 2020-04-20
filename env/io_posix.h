@@ -169,6 +169,8 @@ class PosixWritableFile : public FSWritableFile {
   // support it, so we need to do a dynamic check too.
   bool sync_file_range_supported_;
 #endif  // ROCKSDB_RANGESYNC_PRESENT
+  struct io_uring uring_;
+  int uring_queue_len_ = 0;
 
  public:
   explicit PosixWritableFile(const std::string& fname, int fd,
@@ -187,6 +189,12 @@ class PosixWritableFile : public FSWritableFile {
                                     IODebugContext* dbg) override;
   virtual IOStatus Flush(const IOOptions& opts, IODebugContext* dbg) override;
   virtual IOStatus Sync(const IOOptions& opts, IODebugContext* dbg) override;
+  IOStatus WaitQueue(int max_len);
+  virtual IOStatus AsyncAppend(const Slice& data, const IOOptions& opts, IODebugContext* dbg) override;
+  virtual IOStatus AsyncSync(const IOOptions& opts, IODebugContext* dbg) override;
+  IOStatus AsyncRangeSync(uint64_t offset, uint64_t nbytes);
+  virtual IOStatus WaitAsync() override;
+
   virtual IOStatus Fsync(const IOOptions& opts, IODebugContext* dbg) override;
   virtual bool IsSyncThreadSafe() const override;
   virtual bool use_direct_io() const override { return use_direct_io_; }

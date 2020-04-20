@@ -10,9 +10,10 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/options.h"
 
-using namespace ROCKSDB_NAMESPACE;
-
-std::string kDBPath = "/tmp/rocksdb_simple_example";
+using namespace rocksdb;
+#define BUF_SIZE 1024 * 512
+char buffer[BUF_SIZE];
+std::string kDBPath = "/home/yifan/Documents/database/rocksdb_simple_example_old";
 
 int main() {
   DB* db;
@@ -22,12 +23,21 @@ int main() {
   options.OptimizeLevelStyleCompaction();
   // create the DB if it's not already present
   options.create_if_missing = true;
-
+   options.statistics = rocksdb::CreateDBStatistics();
   // open DB
   Status s = DB::Open(options, kDBPath, &db);
   assert(s.ok());
+  memset(buffer, '1', sizeof(buffer)/sizeof(char));
 
   // Put key-value
+  long int num_ops = 2000;
+   for (long int i = 0; i < num_ops; i++) {
+    s = db->Put(WriteOptions(), std::__cxx11::to_string(i), buffer);
+    assert(s.ok());
+    if (i % (num_ops/10) == 0) {
+        printf("%s %ld %s\n", "writing ", i, " ops");
+    }
+  }
   s = db->Put(WriteOptions(), "key1", "value");
   assert(s.ok());
   std::string value;

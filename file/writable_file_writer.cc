@@ -21,7 +21,7 @@
 #include "util/rate_limiter.h"
 
 namespace ROCKSDB_NAMESPACE {
-Status WritableFileWriter::Append(const Slice& data) {
+Status WritableFileWriter::Append(const Slice& data, bool async) {
   const char* src = data.data();
   size_t left = data.size();
   Status s;
@@ -56,7 +56,7 @@ Status WritableFileWriter::Append(const Slice& data) {
   // Flush only when buffered I/O
   if (!use_direct_io() && (buf_.Capacity() - buf_.CurrentSize()) < left) {
     if (buf_.CurrentSize() > 0) {
-      s = Flush();
+      s = Flush(async);
       if (!s.ok()) {
         return s;
       }
@@ -74,7 +74,7 @@ Status WritableFileWriter::Append(const Slice& data) {
       src += appended;
 
       if (left > 0) {
-        s = Flush();
+        s = Flush(async);
         if (!s.ok()) {
           break;
         }
@@ -83,7 +83,7 @@ Status WritableFileWriter::Append(const Slice& data) {
   } else {
     // Writing directly to file bypassing the buffer
     assert(buf_.CurrentSize() == 0);
-    s = WriteBuffered(src, left);
+    s = WriteBuffered(src, left, async);
   }
 
   TEST_KILL_RANDOM("WritableFileWriter::Append:1", rocksdb_kill_odds);
@@ -94,7 +94,7 @@ Status WritableFileWriter::Append(const Slice& data) {
   return s;
 }
 
-Status WritableFileWriter::Pad(const size_t pad_bytes) {
+Status WritableFileWriter::Pad(const size_t pad_bytes, bool async) {
   assert(pad_bytes < kDefaultPageSize);
   size_t left = pad_bytes;
   size_t cap = buf_.Capacity() - buf_.CurrentSize();
@@ -107,7 +107,7 @@ Status WritableFileWriter::Pad(const size_t pad_bytes) {
     buf_.PadWith(append_bytes, 0);
     left -= append_bytes;
     if (left > 0) {
-      Status s = Flush();
+      Status s = Flush(async);
       if (!s.ok()) {
         return s;
       }
@@ -160,7 +160,7 @@ Status WritableFileWriter::Close() {
 
 // write out the cached data to the OS cache or storage if direct I/O
 // enabled
-Status WritableFileWriter::Flush() {
+Status WritableFileWriter::Flush(bool async) {
   Status s;
   TEST_KILL_RANDOM("WritableFileWriter::Flush:0",
                    rocksdb_kill_odds * REDUCE_ODDS2);
@@ -173,7 +173,7 @@ Status WritableFileWriter::Flush() {
       }
 #endif  // !ROCKSDB_LITE
     } else {
-      s = WriteBuffered(buf_.BufferStart(), buf_.CurrentSize());
+      s = WriteBuffered(buf_.BufferStart(), buf_.CurrentSize(), async);
     }
     if (!s.ok()) {
       return s;
@@ -224,14 +224,14 @@ const char* WritableFileWriter::GetFileChecksumFuncName() const {
   }
 }
 
-Status WritableFileWriter::Sync(bool use_fsync) {
-  Status s = Flush();
+Status WritableFileWriter::Sync(bool use_fsync, bool async) {
+  Status s = Flush(async);
   if (!s.ok()) {
     return s;
   }
   TEST_KILL_RANDOM("WritableFileWriter::Sync:0", rocksdb_kill_odds);
   if (!use_direct_io() && pending_sync_) {
-    s = SyncInternal(use_fsync);
+    s = SyncInternal(use_fsync, async);
     if (!s.ok()) {
       return s;
     }
@@ -253,7 +253,7 @@ Status WritableFileWriter::SyncWithoutFlush(bool use_fsync) {
   return s;
 }
 
-Status WritableFileWriter::SyncInternal(bool use_fsync) {
+Status WritableFileWriter::SyncInternal(bool use_fsync, bool async) {
   Status s;
   IOSTATS_TIMER_GUARD(fsync_nanos);
   TEST_SYNC_POINT("WritableFileWriter::SyncInternal:0");
@@ -261,12 +261,19 @@ Status WritableFileWriter::SyncInternal(bool use_fsync) {
   IOSTATS_CPU_TIMER_GUARD(cpu_write_nanos, env_);
   if (use_fsync) {
     s = writable_file_->Fsync(IOOptions(), nullptr);
-  } else {
+  } else if (!async){
     s = writable_file_->Sync(IOOptions(), nullptr);
+  } else {
+    s = writable_file_->AsyncSync(IOOptions(), nullptr);
   }
   SetPerfLevel(prev_perf_level);
   return s;
 }
+
+Status WritableFileWriter::WaitAsync() {
+  return writable_file_->WaitAsync();
+}
+
 
 Status WritableFileWriter::RangeSync(uint64_t offset, uint64_t nbytes) {
   IOSTATS_TIMER_GUARD(range_sync_nanos);
@@ -276,7 +283,7 @@ Status WritableFileWriter::RangeSync(uint64_t offset, uint64_t nbytes) {
 
 // This method writes to disk the specified data and makes use of the rate
 // limiter if available
-Status WritableFileWriter::WriteBuffered(const char* data, size_t size) {
+Status WritableFileWriter::WriteBuffered(const char* data, size_t size, bool async) {
   Status s;
   assert(!use_direct_io());
   const char* src = data;
@@ -307,7 +314,12 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size) {
       {
         auto prev_perf_level = GetPerfLevel();
         IOSTATS_CPU_TIMER_GUARD(cpu_write_nanos, env_);
-        s = writable_file_->Append(Slice(src, allowed), IOOptions(), nullptr);
+        if (!async) {
+          s = writable_file_->Append(Slice(src, allowed), IOOptions(), nullptr);
+        } else {
+          s = writable_file_->AsyncAppend(Slice(src, allowed), IOOptions(), nullptr);
+        }
+        
         SetPerfLevel(prev_perf_level);
       }
 #ifndef ROCKSDB_LITE
