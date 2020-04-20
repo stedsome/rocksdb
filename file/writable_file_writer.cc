@@ -320,12 +320,12 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size, bool asy
         if (!async) {
           s = writable_file_->Append(Slice(src, allowed), IOOptions(), nullptr);
         } else {
+          fprintf(stderr, "%s\n", "before AsyncAppend");
           s = writable_file_->AsyncAppend(Slice(src, allowed), IOOptions(), nullptr);
           fprintf(stderr, "%s\n", "exiting write Buffered");
         }
         
         SetPerfLevel(prev_perf_level);
-        fprintf(stderr, "%s\n", "finishing write Buffered");
       }
 #ifndef ROCKSDB_LITE
       if (ShouldNotifyListeners()) {
