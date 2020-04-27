@@ -55,7 +55,7 @@ compression_max_dict_bytes=${COMPRESSION_MAX_DICT_BYTES:-0}
 compression_type=${COMPRESSION_TYPE:-zstd}
 duration=${DURATION:-0}
 
-num_keys=${NUM_KEYS:-8000000000}
+num_keys=${NUM_KEYS:-160000000}
 key_size=${KEY_SIZE:-20}
 value_size=${VALUE_SIZE:-400}
 block_size=${BLOCK_SIZE:-8192}

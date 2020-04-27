@@ -1079,7 +1079,7 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   // const char* src = data.data();
   size_t nbytes = data.size();
 
-  IOStatus s = WaitQueue(0);
+  IOStatus s = WaitQueue(100);
 
   if (!s.ok()) {
     return s;
@@ -1111,6 +1111,7 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
     return IOStatus::IOError("async append: submit");
   }
   uring_queue_len_.fetch_add(1);
+  fprintf(stdout, "%d Printing queue length \n", (int)uring_queue_len_);
   filesize_ += nbytes;
   return IOStatus::OK();
 }
@@ -1218,7 +1219,7 @@ IOStatus PosixWritableFile::Sync(const IOOptions& /*opts*/,
 
 IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
                                  IODebugContext* /*dbg*/) {
-  IOStatus s = WaitQueue(200);
+  IOStatus s = WaitQueue(100);
   if (!s.ok()) {
     return s;
   }

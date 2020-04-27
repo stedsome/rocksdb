@@ -33,7 +33,7 @@ int main() {
   long int num_ops = 20000;
    for (long int i = 0; i < num_ops; i++) {
     s = db->Put(WriteOptions(), std::__cxx11::to_string(i), buffer);
-    printf("%s\n", s.ToString().c_str());
+    //printf("%s\n", s.ToString().c_str());
     assert(s.ok());
     if (i % (num_ops/10) == 0) {
         printf("%s %ld %s\n", "writing ", i, " ops");
