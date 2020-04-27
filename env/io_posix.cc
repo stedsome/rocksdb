@@ -1078,11 +1078,11 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   struct io_uring* iu = nullptr;
   iu = CreateIOUring();
 
-  //IOStatus s = WaitQueue(100);
+  /*IOStatus s = WaitQueue(100);
 
   if (!s.ok()) {
     return s;
-  }
+  }*/
 
   struct io_uring_sqe* sqe = io_uring_get_sqe(iu);
   //fprintf(stderr, "%s\n", "post get sqe");
