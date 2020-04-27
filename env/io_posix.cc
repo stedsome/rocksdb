@@ -1083,8 +1083,9 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   if (!s.ok()) {
     return s;
   }*/
-
+  io_uring_lock.lock();
   struct io_uring_sqe* sqe = io_uring_get_sqe(iu);
+  io_uring_lock.unlock();
   //fprintf(stderr, "%s\n", "post get sqe");
   if (sqe == nullptr) {
     return IOStatus::IOError("async append: get sqe");
@@ -1240,7 +1241,9 @@ IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
   struct io_uring* iu = nullptr;
   io_uring_queue_init(kIoUringDepth, iu, 0);
 
+  io_uring_lock.lock();
   struct io_uring_sqe* sqe = io_uring_get_sqe(iu);
+  io_uring_lock.unlock();
   if (sqe == nullptr) {
     return IOStatus::IOError("sync: get sqe");
   }
@@ -1276,8 +1279,9 @@ IOStatus PosixWritableFile::AsyncRangeSync(uint64_t offset, uint64_t nbytes) {
   struct io_uring* iu = nullptr;
   io_uring_queue_init(kIoUringDepth, iu, 0);
 
-
+  io_uring_lock.lock();
   struct io_uring_sqe* sqe = io_uring_get_sqe(iu);
+  io_uring_lock.unlock();
   if (sqe == nullptr) {
     return IOStatus::IOError("sync: get sqe");
   }
