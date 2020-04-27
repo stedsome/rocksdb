@@ -172,6 +172,10 @@ class PosixWritableFile : public FSWritableFile {
   struct io_uring uring_;
   std::atomic_int uring_queue_len_;
   std::mutex io_uring_lock; 
+#if defined(ROCKSDB_IOURING_PRESENT)
+  ThreadLocalPtr* thread_local_io_urings_;
+#endif
+
 
  public:
   explicit PosixWritableFile(const std::string& fname, int fd,
