@@ -1167,9 +1167,6 @@ Status BlockBasedTableBuilder::Finish() {
   if (ok()) {
     r->status = r->file->Sync(false/*fsync*/, true/*async*/);
   }
-  if (ok()) {
-    r->status = r->file->WaitAsync();
-  }
   if (r->file != nullptr) {
     file_checksum_ = r->file->GetFileChecksum();
   }
