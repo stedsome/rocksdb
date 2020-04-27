@@ -1256,7 +1256,7 @@ IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
     }
   }
 
-
+  struct io_uring_sqe* sqe = io_uring_get_sqe(iu);
   if (sqe == nullptr) {
     return IOStatus::IOError("sync: get sqe");
   }
