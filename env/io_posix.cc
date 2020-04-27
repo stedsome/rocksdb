@@ -1077,7 +1077,9 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   size_t nbytes = data.size();
   struct io_uring* iu = nullptr;
   iu = CreateIOUring();
-
+  if (iu == nullptr) {
+    return IOStatus::IOError("async: creating IOUring");
+  }
   /*IOStatus s = WaitQueue(100);
 
   if (!s.ok()) {
