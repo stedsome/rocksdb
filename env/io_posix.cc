@@ -1076,15 +1076,7 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   // const char* src = data.data();
   size_t nbytes = data.size();
   struct io_uring* iu = nullptr;
-  if (thread_local_io_urings_) {
-    iu = static_cast<struct io_uring*>(thread_local_io_urings_->Get());
-    if (iu == nullptr) {
-      iu = CreateIOUring();
-      if (iu != nullptr) {
-        thread_local_io_urings_->Reset(iu);
-      }
-    }
-  }
+  int ret = io_uring_queue_init(kIoUringDepth, iu, 0);
 
   /*IOStatus s = WaitQueue(100);
 
@@ -1246,15 +1238,7 @@ IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
     return s;
   }*/
   struct io_uring* iu = nullptr;
-  if (thread_local_io_urings_) {
-    iu = static_cast<struct io_uring*>(thread_local_io_urings_->Get());
-    if (iu == nullptr) {
-      iu = CreateIOUring();
-      if (iu != nullptr) {
-        thread_local_io_urings_->Reset(iu);
-      }
-    }
-  }
+  int ret = io_uring_queue_init(kIoUringDepth, iu, 0);
 
   struct io_uring_sqe* sqe = io_uring_get_sqe(iu);
   if (sqe == nullptr) {
@@ -1290,15 +1274,8 @@ IOStatus PosixWritableFile::AsyncRangeSync(uint64_t offset, uint64_t nbytes) {
     return s;
   }*/
   struct io_uring* iu = nullptr;
-  if (thread_local_io_urings_) {
-    iu = static_cast<struct io_uring*>(thread_local_io_urings_->Get());
-    if (iu == nullptr) {
-      iu = CreateIOUring();
-      if (iu != nullptr) {
-        thread_local_io_urings_->Reset(iu);
-      }
-    }
-  }
+  int ret = io_uring_queue_init(kIoUringDepth, iu, 0);
+
 
   struct io_uring_sqe* sqe = io_uring_get_sqe(iu);
   if (sqe == nullptr) {
