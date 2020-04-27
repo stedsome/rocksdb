@@ -1128,6 +1128,8 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   }
   io_uring_cqe_seen(iu, cqe);
   //uring_queue_len_.fetch_sub(1);
+  io_uring_queue_exit(iu);
+
   return IOStatus::OK();
 }
 
@@ -1268,6 +1270,7 @@ IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
     free(buffer);
   }
   io_uring_cqe_seen(iu, cqe);
+  io_uring_queue_exit(iu);
   return IOStatus::OK();
 }
 
@@ -1306,6 +1309,7 @@ IOStatus PosixWritableFile::AsyncRangeSync(uint64_t offset, uint64_t nbytes) {
     free(buffer);
   }
   io_uring_cqe_seen(iu, cqe);
+  io_uring_queue_exit(iu);
   return IOStatus::OK();
 }
 
