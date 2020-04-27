@@ -1006,15 +1006,12 @@ PosixWritableFile::PosixWritableFile(const std::string& fname, int fd,
   sync_file_range_supported_ = IsSyncFileRangeSupported(fd_);
 #endif  // ROCKSDB_RANGESYNC_PRESENT
   assert(!options.use_mmap_writes);
-  io_uring_queue_init(kIoUringDepth, &uring_, 0);
-  uring_queue_len_ = 0;
 }
 
 PosixWritableFile::~PosixWritableFile() {
   if (fd_ >= 0) {
     PosixWritableFile::Close(IOOptions(), nullptr);
   }
-  io_uring_queue_exit(&uring_);
 }
 
 IOStatus PosixWritableFile::Append(const Slice& data, const IOOptions& /*opts*/,
@@ -1078,15 +1075,16 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   }
   // const char* src = data.data();
   size_t nbytes = data.size();
+  struct io_uring* iu = nullptr;
+  iu = CreateIOUring();
 
-  IOStatus s = WaitQueue(100);
+  //IOStatus s = WaitQueue(100);
 
   if (!s.ok()) {
     return s;
   }
-  io_uring_lock.lock();
-  struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
-  io_uring_lock.unlock();
+
+  struct io_uring_sqe* sqe = io_uring_get_sqe(&iu);
   //fprintf(stderr, "%s\n", "post get sqe");
   if (sqe == nullptr) {
     return IOStatus::IOError("async append: get sqe");
@@ -1106,13 +1104,29 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
   io_uring_prep_writev(sqe, fd_, iov, 1, filesize_);
   sqe->user_data = reinterpret_cast<uint64_t>(buffer);
   io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
-  int ret = io_uring_submit(&uring_);
+  int ret = io_uring_submit(&iu);
   if (ret <= 0) {
     return IOStatus::IOError("async append: submit");
   }
+  /*
   uring_queue_len_.fetch_add(1);
   fprintf(stdout, "%d Printing queue length \n", (int)uring_queue_len_);
+  */
   filesize_ += nbytes;
+  struct io_uring_cqe* cqe;
+  int ret = io_uring_wait_cqe(&iu, &cqe);
+  if (ret < 0) {
+    return IOStatus::IOError("wait queue: wait cqe");
+  }
+  if (cqe->res < 0) {
+    return IOStatus::IOError("wait queue: res = " + ToString(cqe->res));
+  }
+  if (cqe->user_data != 0) {
+    void* buffer = reinterpret_cast<void*>(cqe->user_data);
+    free(buffer);
+  }
+  io_uring_cqe_seen(&iu, cqe);
+  //uring_queue_len_.fetch_sub(1);
   return IOStatus::OK();
 }
 
@@ -1219,35 +1233,49 @@ IOStatus PosixWritableFile::Sync(const IOOptions& /*opts*/,
 
 IOStatus PosixWritableFile::AsyncSync(const IOOptions& /*opts*/,
                                  IODebugContext* /*dbg*/) {
-  IOStatus s = WaitQueue(100);
+  /*IOStatus s = WaitQueue(100);
   if (!s.ok()) {
     return s;
-  }
-  io_uring_lock.lock();
-  struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
-  io_uring_lock.unlock();
+  }*/
+  struct io_uring* iu = nullptr;
+  iu = CreateIOUring();
+  struct io_uring_sqe* sqe = io_uring_get_sqe(&iu);
+
   if (sqe == nullptr) {
     return IOStatus::IOError("sync: get sqe");
   }
   io_uring_prep_fsync(sqe, fd_, IORING_FSYNC_DATASYNC);
   sqe->user_data = 0;
   io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
-  int ret = io_uring_submit(&uring_);
+  int ret = io_uring_submit(&iu);
   if (ret <= 0) {
     return IOStatus::IOError("sync: submit");
   }
-  uring_queue_len_.fetch_add(1);
+  
+  struct io_uring_cqe* cqe;
+  int ret = io_uring_wait_cqe(&iu, &cqe);
+  if (ret < 0) {
+    return IOStatus::IOError("wait queue: wait cqe");
+  }
+  if (cqe->res < 0) {
+    return IOStatus::IOError("wait queue: res = " + ToString(cqe->res));
+  }
+  if (cqe->user_data != 0) {
+    void* buffer = reinterpret_cast<void*>(cqe->user_data);
+    free(buffer);
+  }
+  io_uring_cqe_seen(&iu, cqe);
   return IOStatus::OK();
 }
 
 IOStatus PosixWritableFile::AsyncRangeSync(uint64_t offset, uint64_t nbytes) {
-  IOStatus s = WaitQueue(200);
+  /*IOStatus s = WaitQueue(200);
   if (!s.ok()) {
     return s;
-  }
-  io_uring_lock.lock();
-  struct io_uring_sqe* sqe = io_uring_get_sqe(&uring_);
-  io_uring_lock.unlock();
+  }*/
+  struct io_uring* iu = nullptr;
+  iu = CreateIOUring();
+  struct io_uring_sqe* sqe = io_uring_get_sqe(&iu);
   if (sqe == nullptr) {
     return IOStatus::IOError("sync: get sqe");
   }
@@ -1255,11 +1283,23 @@ IOStatus PosixWritableFile::AsyncRangeSync(uint64_t offset, uint64_t nbytes) {
   sqe->sync_range_flags = SYNC_FILE_RANGE_WRITE;
   sqe->user_data = 0;
   io_uring_sqe_set_flags(sqe, IOSQE_IO_LINK);
-  int ret = io_uring_submit(&uring_);
+  int ret = io_uring_submit(&iu);
   if (ret <= 0) {
     return IOStatus::IOError("sync: submit");
   }
-  uring_queue_len_.fetch_add(1);
+  struct io_uring_cqe* cqe;
+  int ret = io_uring_wait_cqe(&iu, &cqe);
+  if (ret < 0) {
+    return IOStatus::IOError("wait queue: wait cqe");
+  }
+  if (cqe->res < 0) {
+    return IOStatus::IOError("wait queue: res = " + ToString(cqe->res));
+  }
+  if (cqe->user_data != 0) {
+    void* buffer = reinterpret_cast<void*>(cqe->user_data);
+    free(buffer);
+  }
+  io_uring_cqe_seen(&iu, cqe);
   return IOStatus::OK();
 }
 
