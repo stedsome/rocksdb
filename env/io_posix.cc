@@ -1111,7 +1111,6 @@ IOStatus PosixWritableFile::AsyncAppend(const Slice& data, const IOOptions& /*op
     return IOStatus::IOError("async append: submit");
   }
   uring_queue_len_.fetch_add(1);
-  fprintf(stdout, "%d Printing queue length \n", (int)uring_queue_len_);
   filesize_ += nbytes;
   return IOStatus::OK();
 }

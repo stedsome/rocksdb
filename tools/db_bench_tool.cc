@@ -1843,7 +1843,11 @@ class Stats {
   uint64_t finish_;
   double seconds_;
   uint64_t done_;
+  uint64_t done_read;
+  uint64_t done_write;
   uint64_t last_report_done_;
+  uint64_t last_report_done_read;
+  uint64_t last_report_done_write;
   uint64_t next_report_;
   uint64_t bytes_;
   uint64_t last_op_finish_;
@@ -1868,7 +1872,11 @@ class Stats {
     last_op_finish_ = start_;
     hist_.clear();
     done_ = 0;
+    done_read = 0;
+    done_write = 0;
     last_report_done_ = 0;
+    last_report_done_read = 0;
+    last_report_done_write = 0;
     bytes_ = 0;
     seconds_ = 0;
     start_ = FLAGS_env->NowMicros();
@@ -2010,14 +2018,20 @@ class Stats {
 
         } else {
 
-          fprintf(stderr,
+           fprintf(stderr,
                   "%s ... thread %d: (%" PRIu64 ",%" PRIu64 ") ops and "
-                  "(%.1f,%.1f) ops/second in (%.6f,%.6f) seconds\n",
+                  "(%.1f,%.1f) ops/second, (%.1f,%.1f) read ops/second, (%.1f,%.1f) read ops/second, in (%.6f,%.6f) seconds\n",
                   FLAGS_env->TimeToString(now/1000000).c_str(),
                   id_,
                   done_ - last_report_done_, done_,
                   (done_ - last_report_done_) /
+                  (usecs_since_last / 1000000.0), 
+                  (done_read - last_report_done_read) /
                   (usecs_since_last / 1000000.0),
+                  done_read / ((now - start_) / 1000000.0),
+                  (done_write - last_report_done_write) /
+                  (usecs_since_last / 1000000.0),
+                  done_write / ((now - start_) / 1000000.0),
                   done_ / ((now - start_) / 1000000.0),
                   (now - last_report_finish_) / 1000000.0,
                   (now - start_) / 1000000.0);
