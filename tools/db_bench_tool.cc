@@ -2027,7 +2027,7 @@ class Stats {
            fprintf(stderr, "%s ... threadweaewd %d: (%llu,%llu) ops and (%.1f,%.1f) ops/second, (%.1f,%.1f) read ops/second, (%.1f,%.1f) write ops/second, in (%.6f,%.6f) seconds\n",
                   FLAGS_env->TimeToString(now/1000000).c_str(),
                   id_,
-                  done_ - last_report_done_, done_,
+                  (long unsigned int)(done_ - last_report_done_), (long unsigned int)done_,
                   (done_ - last_report_done_) /
                   (usecs_since_last / 1000000.0), 
                   (done_read - last_report_done_read) /
