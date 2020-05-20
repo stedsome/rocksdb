@@ -1994,6 +1994,12 @@ class Stats {
     }
 
     done_ += num_ops;
+    if (op_type == kRead) {
+        done_read += num_ops;
+    } else if (op_type == kWrite) {
+        done_write += num_ops;
+    }
+
     if (done_ >= next_report_) {
       if (!FLAGS_stats_interval) {
         if      (next_report_ < 1000)   next_report_ += 100;
