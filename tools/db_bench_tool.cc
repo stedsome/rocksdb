@@ -2024,7 +2024,7 @@ class Stats {
 
         } else {
 
-           fprintf(stderr, "%s ... threadweaewd %d: (%" PRIu64 ",%" PRIu64 ") ops and ""(%.1f,%.1f) ops/second, 
+           fprintf(stderr, "%s ... threadweaewd %d: (%" PRIu64 ",%" PRIu64 ") ops and (%.1f,%.1f) ops/second, 
                   (%.1f,%.1f) read ops/second, (%.1f,%.1f) write ops/second, in (%.6f,%.6f) seconds\n",
                   FLAGS_env->TimeToString(now/1000000).c_str(),
                   id_,
